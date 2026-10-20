@@ -1,0 +1,26 @@
+# Builds the SSH tunnel sidecar image from the tunnel/ folder.
+#   oc start-build ssh-tunnel --from-dir=tunnel --follow
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: ssh-tunnel
+  labels:
+    app: db-console
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: ssh-tunnel
+  labels:
+    app: db-console
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: ssh-tunnel:latest

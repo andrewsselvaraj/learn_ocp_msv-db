@@ -1,8 +1,6 @@
+# Direct connection: the app talks straight to DB_HOST:DB_PORT from the ConfigMap.
 # Apply everything except the Secret (create that one by hand, see README):
 #   oc apply -k openshift/
+# Need an SSH tunnel to reach the DB? Use  oc apply -k openshift/tunnel/  instead.
 resources:
-  - build.yaml
-  - configmap.yaml
-  - deployment.yaml
-  - service.yaml
-  - route.yaml
+  - base

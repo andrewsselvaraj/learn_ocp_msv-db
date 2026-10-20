@@ -1,0 +1,6 @@
+resources:
+  - build.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml

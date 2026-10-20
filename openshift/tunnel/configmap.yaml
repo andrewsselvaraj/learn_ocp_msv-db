@@ -1,0 +1,15 @@
+# Where the SSH tunnel goes. Set SSH_USER to your SSH login on the DB server.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssh-tunnel-config
+  labels:
+    app: db-console
+data:
+  SSH_HOST: "63.142.240.31"
+  SSH_PORT: "22"
+  SSH_USER: "CHANGE_ME"
+  # MySQL as seen from the SSH server (usually itself)
+  REMOTE_DB_HOST: "127.0.0.1"
+  REMOTE_DB_PORT: "3306"
+  LOCAL_PORT: "3306"
