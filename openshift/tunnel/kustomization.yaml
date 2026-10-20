@@ -1,0 +1,9 @@
+# Same app as openshift/, plus an SSH tunnel sidecar to reach a MySQL that only
+# listens on the DB server's localhost (or whose port 3306 is firewalled).
+#   oc apply -k openshift/tunnel/
+resources:
+  - ../base
+  - build.yaml
+  - configmap.yaml
+patches:
+  - path: deployment-patch.yaml

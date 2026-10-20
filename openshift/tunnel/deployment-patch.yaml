@@ -1,0 +1,43 @@
+# Adds the ssh-tunnel sidecar to the db-console pod and points the app at it.
+# Containers in one pod share a network namespace, so 127.0.0.1 in the app
+# container is the same 127.0.0.1 the tunnel listens on.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-console
+  annotations:
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"db-console:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"db-console\")].image"},
+       {"from":{"kind":"ImageStreamTag","name":"ssh-tunnel:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"ssh-tunnel\")].image"}]
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: db-console
+          env:
+            # Overrides DB_HOST/DB_PORT from the ConfigMap: talk to the sidecar, not the server.
+            - name: DB_HOST
+              value: "127.0.0.1"
+            - name: DB_PORT
+              value: "3306"
+        - name: ssh-tunnel
+          image: ssh-tunnel:latest
+          envFrom:
+            - configMapRef:
+                name: ssh-tunnel-config
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /ssh
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: db-ssh-key
+            defaultMode: 0440

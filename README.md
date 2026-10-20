@@ -94,11 +94,59 @@ Changing a ConfigMap or Secret does **not** restart pods on its own. Env vars ar
 
 | Error on the page | Likely cause |
 |---|---|
-| `Communications link failure` / `connect timed out` | The cluster can't reach `63.142.240.31:3306`: an egress firewall or `EgressFirewall`/`NetworkPolicy` is blocking it, or MySQL isn't listening on the public interface. Test with `oc debug deploy/db-console -- bash -c 'timeout 5 bash -c "</dev/tcp/63.142.240.31/3306" && echo open'`. |
+| `Communications link failure` / `connect timed out` | The cluster can't reach `63.142.240.31:3306`: an egress firewall or `EgressFirewall`/`NetworkPolicy` is blocking it, or MySQL isn't listening on the public interface. Test with `oc exec deploy/db-console -- bash -c "timeout 5 bash -c '</dev/tcp/63.142.240.31/3306' && echo open"`. `Connection refused` means nothing accepts connections on that port: see the SSH tunnel section below. |
 | `Access denied for user 'x'@'<ip>'` | Wrong password, or the MySQL user isn't allowed from the cluster's egress IP. On MySQL: `CREATE USER 'x'@'%' ...` or grant for that IP. |
 | `Unknown database 'ocp_connect'` | Schema name in the ConfigMap is wrong or not created. |
 | `Public Key Retrieval is not allowed` | Already handled with `allowPublicKeyRetrieval=true` in the JDBC URL. |
 | Pod in `CreateContainerConfigError` | The Secret `db-console-secret` doesn't exist or a key name is misspelled. |
+
+## Reaching MySQL through an SSH tunnel
+
+If MySQL's port 3306 is closed to the internet (only SSH on port 22 is open, or MySQL listens on the server's `127.0.0.1` only), use the tunnel overlay. It adds a **sidecar** container to the pod that holds an SSH tunnel open:
+
+```
+ Pod db-console
+ ┌───────────────────────────────────────────────────────────────┐
+ │  db-console container            ssh-tunnel container         │
+ │  JDBC -> 127.0.0.1:3306 ──────▶  listens on 127.0.0.1:3306    │
+ │  (same network namespace)        ssh -N -L 3306:127.0.0.1:3306│
+ └───────────────────────────────────────────┬───────────────────┘
+                                             │ SSH, TCP 22 (encrypted)
+                                             ▼
+                          63.142.240.31  sshd ──▶ MySQL on its 127.0.0.1:3306
+```
+
+Containers in one pod share `localhost`, so the app just connects to `127.0.0.1:3306` and doesn't know a tunnel exists. The overlay overrides `DB_HOST`/`DB_PORT` for the app container; everything else (schema, DB user and password) stays the same.
+
+Setup (Windows Command Prompt shown; on Linux/Mac use `/` paths):
+
+```bat
+:: 1. Put your SSH key (and known_hosts, so the server's identity is checked) in a Secret
+oc create secret generic db-ssh-key --from-file=id_ed25519=D:\tunnel-key\id_ed25519 --from-file=known_hosts=D:\tunnel-key\known_hosts
+
+:: 2. Set your SSH login name: edit SSH_USER in openshift\tunnel\configmap.yaml (and SSH_PORT if not 22)
+
+:: 3. Apply the overlay (app + tunnel sidecar), then build the sidecar image
+oc apply -k openshift/tunnel/
+oc start-build ssh-tunnel --from-dir=tunnel --follow
+
+:: 4. Check both containers are up (READY 2/2) and read the tunnel's log
+oc get pods -l app=db-console
+oc logs deploy/db-console -c ssh-tunnel
+```
+
+To go back to a direct connection, run `oc apply -k openshift/`. That removes the sidecar and the `127.0.0.1` override again.
+
+Tunnel errors, as shown by `oc logs deploy/db-console -c ssh-tunnel`:
+
+| Log line | Meaning |
+|---|---|
+| `Permission denied (publickey)` | Wrong `SSH_USER`, or the public key (`id_ed25519.pub`) isn't in `~/.ssh/authorized_keys` for that user on the server. |
+| `Host key verification failed` | `known_hosts` doesn't have an entry for `63.142.240.31` (or for `[63.142.240.31]:port` when SSH isn't on 22). Re-create the Secret without `known_hosts` to trust on first use. |
+| `Connection refused` / `timed out` on port 22 | SSH isn't reachable from the cluster either. |
+| `channel 2: open failed: connect failed` | Tunnel is up, but MySQL isn't on `REMOTE_DB_HOST:REMOTE_DB_PORT` as seen from the SSH server. |
+
+Running locally, do the same by hand: `ssh -N -L 3306:127.0.0.1:3306 <user>@63.142.240.31 -i D:\tunnel-key\id_ed25519`, then start the app with `DB_HOST=127.0.0.1`.
 
 ## Run it locally
 
@@ -133,13 +181,20 @@ src/main/resources/
   application.properties      datasource from env vars, pool + probe settings
   templates/index.html        Thymeleaf page
 openshift/
-  configmap.yaml              DB_HOST, DB_PORT, DB_NAME
+  kustomization.yaml          `oc apply -k openshift/`  (direct connection)
   secret-template.yaml        placeholder only; real Secret is made with `oc create secret`
-  build.yaml                  ImageStream + BuildConfig (Docker strategy, binary source)
-  deployment.yaml             2 replicas, env from ConfigMap + Secret, health probes
-  service.yaml                ClusterIP service on 8080
-  route.yaml                  edge-TLS public route
-  kustomization.yaml          `oc apply -k openshift/`
+  base/
+    configmap.yaml            DB_HOST, DB_PORT, DB_NAME
+    build.yaml                ImageStream + BuildConfig (Docker strategy, binary source)
+    deployment.yaml           2 replicas, env from ConfigMap + Secret, health probes
+    service.yaml              ClusterIP service on 8080
+    route.yaml                edge-TLS public route
+  tunnel/                     `oc apply -k openshift/tunnel/`  (via SSH tunnel sidecar)
+    configmap.yaml            SSH_HOST, SSH_PORT, SSH_USER
+    build.yaml                ImageStream + BuildConfig for the sidecar
+    deployment-patch.yaml     adds the ssh-tunnel container, points the app at 127.0.0.1
+tunnel/
+  Dockerfile, entrypoint.sh   UBI minimal + OpenSSH client that holds the tunnel open
 Dockerfile                    Maven build stage + UBI OpenJDK 17 runtime
 ```
 
