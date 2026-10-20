@@ -1,0 +1,8 @@
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+# Never commit a filled-in secret
+openshift/*secret*.local.yaml
+.env
