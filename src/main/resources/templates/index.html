@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DB Console</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+<header>
+    <h1>MySQL Query Console</h1>
+    <span class="pod">served by pod <strong th:text="${podName}">local</strong></span>
+</header>
+
+<main>
+    <form method="post" th:action="@{/query}">
+        <label for="sql">SQL</label>
+        <textarea id="sql" name="sql" rows="8" spellcheck="false" th:text="${sql}"></textarea>
+        <div class="actions">
+            <button type="submit">Run query</button>
+            <a class="button secondary" th:href="@{/connection}">Test connection</a>
+            <span class="hint">Ctrl+Enter to run. One statement at a time.</span>
+        </div>
+    </form>
+
+    <section th:if="${connectionInfo != null}" class="panel">
+        <h2>Connection</h2>
+        <table class="kv">
+            <tr th:each="entry : ${connectionInfo}">
+                <th th:text="${entry.key}"></th>
+                <td th:text="${entry.value}"
+                    th:classappend="${entry.key == 'Status' and entry.value != 'Connected'} ? 'bad' : ''"></td>
+            </tr>
+        </table>
+    </section>
+
+    <section th:if="${result != null}" class="panel">
+        <div th:if="${result.hasError()}" class="error">
+            <h2>Error</h2>
+            <pre th:text="${result.error}"></pre>
+        </div>
+
+        <div th:if="${!result.hasError() and result.updateCount != null}" class="ok">
+            <span th:text="${result.updateCount} + ' row(s) affected'"></span>
+            <span class="meta" th:text="'in ' + ${result.elapsedMillis} + ' ms'"></span>
+        </div>
+
+        <div th:if="${result.hasResultSet()}">
+            <p class="meta">
+                <span th:text="${#lists.size(result.rows)} + ' row(s)'"></span>
+                <span th:text="'in ' + ${result.elapsedMillis} + ' ms'"></span>
+                <span th:if="${result.truncated}" class="warn">(output truncated, add a LIMIT)</span>
+            </p>
+            <div class="scroll">
+                <table class="grid">
+                    <thead>
+                    <tr><th th:each="col : ${result.columns}" th:text="${col}"></th></tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${result.rows}">
+                        <td th:each="cell : ${row}">
+                            <span th:if="${cell == null}" class="null">NULL</span>
+                            <span th:unless="${cell == null}" th:text="${cell}"></span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel samples">
+        <h2>Try these</h2>
+        <ul>
+            <li><code>SHOW TABLES</code></li>
+            <li><code>CREATE TABLE IF NOT EXISTS greeting (id INT AUTO_INCREMENT PRIMARY KEY, msg VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)</code></li>
+            <li><code>INSERT INTO greeting (msg) VALUES ('hello from OpenShift')</code></li>
+            <li><code>SELECT * FROM greeting</code></li>
+            <li><code>SELECT @@hostname, @@version, CONNECTION_ID()</code></li>
+        </ul>
+    </section>
+</main>
+
+<script>
+    document.querySelectorAll('.samples code').forEach(function (el) {
+        el.title = 'Click to copy into the editor';
+        el.addEventListener('click', function () {
+            var box = document.getElementById('sql');
+            box.value = el.textContent;
+            box.focus();
+        });
+    });
+    document.getElementById('sql').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            this.form.submit();
+        }
+    });
+</script>
+</body>
+</html>

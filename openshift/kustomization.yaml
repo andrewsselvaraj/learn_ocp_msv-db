@@ -1,0 +1,8 @@
+# Apply everything except the Secret (create that one by hand, see README):
+#   oc apply -k openshift/
+resources:
+  - build.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml

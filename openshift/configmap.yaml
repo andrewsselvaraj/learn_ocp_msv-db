@@ -1,0 +1,12 @@
+# Non-sensitive connection settings. Change DB_HOST here to point the app at another MySQL.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-console-config
+  labels:
+    app: db-console
+data:
+  DB_HOST: "63.142.240.31"
+  DB_PORT: "3306"
+  DB_NAME: "ocp_connect"
+  DB_USE_SSL: "false"
