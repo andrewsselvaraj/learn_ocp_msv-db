@@ -1,0 +1,16 @@
+# Public HTTPS URL for the Service. OpenShift generates the hostname; see `oc get route db-console`.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: db-console
+  labels:
+    app: db-console
+spec:
+  to:
+    kind: Service
+    name: db-console
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

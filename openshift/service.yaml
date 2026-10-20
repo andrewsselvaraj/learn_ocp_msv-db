@@ -1,0 +1,14 @@
+# Stable in-cluster address (db-console:8080) in front of all pods labelled app=db-console.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-console
+  labels:
+    app: db-console
+spec:
+  selector:
+    app: db-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

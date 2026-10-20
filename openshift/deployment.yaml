@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-console
+  labels:
+    app: db-console
+  annotations:
+    # Re-deploy automatically whenever a new image lands in the db-console ImageStream.
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"db-console:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"db-console\")].image"}]
+spec:
+  replicas: 2   # two pods, so you can watch the Service load-balance between them
+  selector:
+    matchLabels:
+      app: db-console
+  template:
+    metadata:
+      labels:
+        app: db-console
+    spec:
+      containers:
+        - name: db-console
+          # Replaced by the image trigger above. If you build elsewhere, put your registry image here.
+          image: db-console:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          # Host/port/schema come from the ConfigMap ...
+          envFrom:
+            - configMapRef:
+                name: db-console-config
+          # ... and the credentials come from the Secret. They never live in the image or in git.
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: db-console-secret
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-console-secret
+                  key: DB_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi

@@ -1,0 +1,27 @@
+# Builds the image inside OpenShift from the Dockerfile and stores it in an ImageStream.
+# Start a build from your local checkout with:
+#   oc start-build db-console --from-dir=. --follow
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: db-console
+  labels:
+    app: db-console
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: db-console
+  labels:
+    app: db-console
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: db-console:latest
